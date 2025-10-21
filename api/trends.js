@@ -3,12 +3,14 @@ import fetch from "node-fetch";
 export default async function handler(req, res) {
   try {
     const { keyword = "navidad", geo = "CO" } = req.query;
-    const trendsURL = `https://trends.google.com/trends/api/explore?hl=es-419&tz=-300&req={"comparisonItem":[{"keyword":"${keyword}","geo":"${geo}","time":"now 7-d"}],"category":0,"property":""}`;
 
+    // 1️⃣ Google Trends: tendencias relacionadas
+    const trendsURL = `https://trends.google.com/trends/api/explore?hl=es-419&tz=-300&req={"comparisonItem":[{"keyword":"${keyword}","geo":"${geo}","time":"now 7-d"}],"category":0,"property":""}`;
     const trendsResponse = await fetch(trendsURL);
     const trendsText = await trendsResponse.text();
     const jsonStart = trendsText.indexOf("{");
     const trendsData = JSON.parse(trendsText.slice(jsonStart));
+
     const relatedToken =
       trendsData.widgets?.find((w) => w.id === "RELATED_TOPICS")?.token || null;
 
@@ -24,6 +26,7 @@ export default async function handler(req, res) {
           ?.map((r) => r.topic.title) || [];
     }
 
+    // 2️⃣ Mercado Libre CO
     const mercadoResults = await Promise.all(
       related.map(async (term) => {
         const mlResp = await fetch(
@@ -44,18 +47,15 @@ export default async function handler(req, res) {
       })
     );
 
-    const imagenes = await Promise.all(
-      related.map(async (term) => {
-        const imgURL = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
-          term
-        )}`;
-        return {
-          tema: term,
-          imagen: imgURL,
-        };
-      })
-    );
+    // 3️⃣ Google Imágenes (link directo)
+    const imagenes = related.map((term) => ({
+      tema: term,
+      imagen: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
+        term
+      )}`,
+    }));
 
+    // 4️⃣ Combinar todo
     const resultados = mercadoResults.map((r) => ({
       ...r,
       imagen:
@@ -72,7 +72,6 @@ export default async function handler(req, res) {
       tendencias: resultados,
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({
       ok: false,
       error: "Error al obtener datos",
