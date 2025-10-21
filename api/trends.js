@@ -3,9 +3,8 @@ import fetch from "node-fetch";
 export default async function handler(req, res) {
   try {
     const { keyword = "navidad", geo = "CO" } = req.query;
-    const trendsURL = `https://trends.google.com/trends/api/explore?hl=es-419&tz=-300&req={"comparisonItem":[{"keyword":"${keyword}","geo":"${geo}","time":"now 7-d"}],"category":0,"property":""}&tz=-300`;
+    const trendsURL = `https://trends.google.com/trends/api/explore?hl=es-419&tz=-300&req={"comparisonItem":[{"keyword":"${keyword}","geo":"${geo}","time":"now 7-d"}],"category":0,"property":""}`;
 
-    // 🔥 1. Google Trends: obtener temas relacionados
     const trendsResponse = await fetch(trendsURL);
     const trendsText = await trendsResponse.text();
     const jsonStart = trendsText.indexOf("{");
@@ -25,7 +24,6 @@ export default async function handler(req, res) {
           ?.map((r) => r.topic.title) || [];
     }
 
-    // 🔥 2. Mercado Libre CO
     const mercadoResults = await Promise.all(
       related.map(async (term) => {
         const mlResp = await fetch(
@@ -46,7 +44,6 @@ export default async function handler(req, res) {
       })
     );
 
-    // 🔥 3. Google Imágenes (búsqueda simple)
     const imagenes = await Promise.all(
       related.map(async (term) => {
         const imgURL = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
@@ -59,7 +56,6 @@ export default async function handler(req, res) {
       })
     );
 
-    // 🔥 4. Combinar todo
     const resultados = mercadoResults.map((r) => ({
       ...r,
       imagen:
@@ -79,7 +75,7 @@ export default async function handler(req, res) {
     console.error(err);
     res.status(500).json({
       ok: false,
-      error: "Error al obtener datos en tiempo real",
+      error: "Error al obtener datos",
       detalle: err.message,
     });
   }
