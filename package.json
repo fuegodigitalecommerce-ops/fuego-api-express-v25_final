@@ -1,11 +1,8 @@
 {
-  "name": "fuego-api-express-v25",
+  "name": "fuego-api",
   "version": "1.0.0",
-  "private": true,
-  "type": "commonjs",
-  "scripts": { "start": "node server.js" },
+  "type": "module",
   "dependencies": {
-    "google-trends-api": "^4.9.0",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^3.3.2"
   }
 }
