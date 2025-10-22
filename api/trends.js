@@ -14,22 +14,32 @@ export default async function handler(req, res) {
     )}`;
 
     const response = await fetch(trendsURL);
-    const text = await response.text();
+    let text = await response.text();
 
-    // ✅ Enviamos la respuesta cruda para inspección
+    // 🔹 Elimina el prefijo no válido de Google Trends: )]}',
+    if (text.startsWith(")]}',")) {
+      text = text.substring(5);
+    }
+
+    // 🔹 Ahora sí, intenta parsear el JSON limpio
+    const data = JSON.parse(text);
+
+    // ✅ Si hay widgets relacionados, los mostramos
+    const relatedWidget = data.widgets?.find((w) => w.id === "RELATED_TOPICS");
+    const token = relatedWidget?.token || null;
+
     res.status(200).json({
       ok: true,
-      debug: "Respuesta cruda desde Google Trends",
       keyword,
       country,
-      trendsURL,
-      preview: text.slice(0, 500), // solo los primeros 500 caracteres
+      token,
+      message: "Google Trends limpio y funcionando correctamente",
     });
 
   } catch (error) {
     res.status(500).json({
       ok: false,
-      error: "Error al obtener datos",
+      error: "Error al procesar la respuesta de Google Trends",
       detalle: error.message,
     });
   }
