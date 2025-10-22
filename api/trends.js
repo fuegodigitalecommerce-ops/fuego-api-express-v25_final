@@ -18,11 +18,23 @@ export default async function handler(req, res) {
     const response = await fetch(url);
     let raw = await response.text();
 
-    // 🔥 Limpieza mejorada
-    const jsonStart = raw.indexOf("{");
-    const cleanJson = raw.slice(jsonStart).trim();
+    // 🔥 Limpieza extrema para evitar errores de JSON
+    raw = raw
+      .replace(/^[\)\]\}'\s]+/, "") // quita )]}'
+      .replace(/[^\x20-\x7E]+/g, "") // elimina caracteres invisibles
+      .trim();
 
-    const data = JSON.parse(cleanJson);
+    // Encuentra el primer { y corta antes
+    const start = raw.indexOf("{");
+    if (start > 0) raw = raw.substring(start);
+
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (jsonError) {
+      console.error("Error al parsear JSON limpio:", raw.slice(0, 200));
+      throw jsonError;
+    }
 
     return res.status(200).json({
       ok: true,
