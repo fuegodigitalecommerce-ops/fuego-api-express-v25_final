@@ -1,5 +1,5 @@
 {
-  "name": "fuego-api-real-co",
+  "name": "fuego-api-express",
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
