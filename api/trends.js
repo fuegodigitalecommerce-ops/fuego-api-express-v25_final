@@ -1,81 +1,72 @@
 import fetch from "node-fetch";
 
 export default async function handler(req, res) {
+  const keyword = req.query.keyword || "navidad";
+  const country = req.query.country || "CO";
+
   try {
-    const { keyword = "navidad", geo = "CO" } = req.query;
-
-    // 1️⃣ Google Trends: tendencias relacionadas
-    const trendsURL = `https://trends.google.com/trends/api/explore?hl=es-419&tz=-300&req={"comparisonItem":[{"keyword":"${keyword}","geo":"${geo}","time":"now 7-d"}],"category":0,"property":""}`;
+    // 🔥 1. Solicitud a Google Trends
+    const trendsURL = `https://trends.google.com/trends/api/explore?hl=es-419&tz=-300&req={"comparisonItem":[{"keyword":"${keyword}","geo":"${country}","time":"today 12-m"}],"category":0,"property":""}`;
     const trendsResponse = await fetch(trendsURL);
-    const trendsText = await trendsResponse.text();
-    const jsonStart = trendsText.indexOf("{");
-    const trendsData = JSON.parse(trendsText.slice(jsonStart));
+    let trendsText = await trendsResponse.text();
 
-    const relatedToken =
-      trendsData.widgets?.find((w) => w.id === "RELATED_TOPICS")?.token || null;
+    // Limpieza del formato raro de Google (quita paréntesis o basura inicial)
+    trendsText = trendsText.replace(/^[^{]+/, "");
+    const trendsData = JSON.parse(trendsText);
 
-    let related = [];
-    if (relatedToken) {
-      const relatedURL = `https://trends.google.com/trends/api/widgetdata/relatedsearches?hl=es-419&tz=-300&req={"restriction":{"geo":{"country":"${geo}"},"complexKeywordsRestriction":{"keyword":[{"type":"BROAD","value":"${keyword}"}]}},"keywordType":"BROAD","metric":["TOP"],"trendinessSettings":{"compareTime":"now 7-d"},"requestOptions":{"property":"","backend":"IZG","category":0}}&token=${relatedToken}`;
-      const relResp = await fetch(relatedURL);
-      const relText = await relResp.text();
-      const relJSON = JSON.parse(relText.slice(relText.indexOf("{")));
-      related =
-        relJSON.default?.rankedList?.[0]?.rankedKeyword
-          ?.slice(0, 5)
-          ?.map((r) => r.topic.title) || [];
-    }
+    // Busca el token de temas relacionados
+    const relatedToken = trendsData.widgets?.find((w) => w.id === "RELATED_TOPICS")?.token;
+    if (!relatedToken) throw new Error("No se encontró token de tendencias relacionadas");
 
-    // 2️⃣ Mercado Libre CO
-    const mercadoResults = await Promise.all(
-      related.map(async (term) => {
-        const mlResp = await fetch(
-          `https://api.mercadolibre.com/sites/MCO/search?q=${encodeURIComponent(
-            term
-          )}`
-        );
-        const mlData = await mlResp.json();
-        const productos = mlData.results
-          ?.slice(0, 3)
-          ?.map((p) => ({
-            titulo: p.title,
-            precio: p.price,
-            link: p.permalink,
-            imagen: p.thumbnail,
-          })) || [];
-        return { tema: term, productos };
+    // 🔥 2. Solicitud de temas relacionados reales
+    const relatedURL = `https://trends.google.com/trends/api/widgetdata/relatedsearches?hl=es-419&tz=-300&req={"restriction":{"geo":{"country":"${country}"},"time":"today 12-m","complexKeywordsRestriction":{"keyword":[{"type":"BROAD","value":"${keyword}"}]}},"keywordType":"QUERY","metric":["TOP"],"trendinessSettings":{"compareTime":"today 12-m"},"requestOptions":{"property":"","backend":"IZG","category":0}}&token=${relatedToken}`;
+    const relatedResponse = await fetch(relatedURL);
+    let relatedText = await relatedResponse.text();
+    relatedText = relatedText.replace(/^[^{]+/, "");
+    const relatedData = JSON.parse(relatedText);
+
+    const related = relatedData.default?.rankedList?.[0]?.rankedKeyword?.slice(0, 5) || [];
+
+    // 🔥 3. Enriquecer con datos de Mercado Libre e imágenes
+    const enriched = await Promise.all(
+      related.map(async (item) => {
+        const title = item.query || item.topic?.title || "Producto en tendencia";
+
+        // Mercado Libre
+        const mlUrl = `https://api.mercadolibre.com/sites/MCO/search?q=${encodeURIComponent(title)}`;
+        const mlResp = await fetch(mlUrl);
+        const mlJson = await mlResp.json();
+        const firstItem = mlJson.results?.[0];
+
+        // Imagen desde Google
+        const imageQuery = encodeURIComponent(title + " producto");
+        const imageUrl = `https://www.google.com/search?tbm=isch&q=${imageQuery}`;
+
+        return {
+          title,
+          interest: item.value || 0,
+          link: firstItem?.permalink || imageUrl,
+          price: firstItem?.price || null,
+          thumbnail: firstItem?.thumbnail || null,
+          source: "Google Trends + Mercado Libre"
+        };
       })
     );
 
-    // 3️⃣ Google Imágenes (link directo)
-    const imagenes = related.map((term) => ({
-      tema: term,
-      imagen: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
-        term
-      )}`,
-    }));
-
-    // 4️⃣ Combinar todo
-    const resultados = mercadoResults.map((r) => ({
-      ...r,
-      imagen:
-        imagenes.find((i) => i.tema === r.tema)?.imagen ||
-        "https://via.placeholder.com/300x200?text=Sin+imagen",
-      popularidad: Math.floor(Math.random() * 20) + 80,
-    }));
-
+    // Respuesta final limpia
     res.status(200).json({
       ok: true,
-      pais: geo,
       keyword,
-      fecha_consulta: new Date().toISOString(),
-      tendencias: resultados,
+      country,
+      total: enriched.length,
+      results: enriched,
     });
-  } catch (err) {
+
+  } catch (error) {
     res.status(500).json({
       ok: false,
       error: "Error al obtener datos",
-      detalle: err.message,
+      detalle: error.message,
     });
   }
 }
