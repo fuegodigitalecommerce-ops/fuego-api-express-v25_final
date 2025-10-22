@@ -1,9 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "api/trends.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/api/trends", "dest": "api/trends.js" }
-  ]
+  "builds": [{ "src": "api/*.js", "use": "@vercel/node" }],
+  "routes": [{ "src": "/api/(.*)", "dest": "/api/$1" }]
 }
